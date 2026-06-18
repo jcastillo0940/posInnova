@@ -29,6 +29,7 @@ class Sale extends Model
         'usd_paid_crc',
         'reversed_by_sale_id',
         'reversal_reason',
+        'notes',
     ];
 
     protected function casts(): array

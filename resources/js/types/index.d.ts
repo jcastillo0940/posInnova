@@ -14,6 +14,7 @@ export interface AuthPermissions {
     accessCash: boolean;
     manageCash: boolean;
     manageSettings: boolean;
+    manageUsers: boolean;
     useSupervisorPin: boolean;
 }
 

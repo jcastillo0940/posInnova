@@ -121,10 +121,10 @@ export default function SettingsIndex({ settings }: Props) {
                             </p>
                         </div>
                         <Link
-                            href={route('admin.products.import.index')}
+                            href={route('admin.imports.index')}
                             className="rounded bg-primary px-4 py-3 text-body-sm font-semibold text-on-primary"
                         >
-                            Abrir importador
+                            Abrir importaciones
                         </Link>
                     </div>
                 </section>

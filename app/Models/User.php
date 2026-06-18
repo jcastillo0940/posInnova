@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'pin_hash', 'role', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -28,12 +28,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'pin_hash' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
     public function isAdmin(): bool
     {
         return in_array($this->role, ['owner', 'admin', 'super'], true);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return in_array($this->role, ['owner', 'super'], true);
     }
 
     public function canBypassPin(): bool

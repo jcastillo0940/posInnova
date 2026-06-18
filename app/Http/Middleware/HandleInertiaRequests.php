@@ -51,6 +51,7 @@ class HandleInertiaRequests extends Middleware
                     'accessCash' => (bool) $user,
                     'manageCash' => $user?->canCloseCash() ?? false,
                     'manageSettings' => $user?->isAdmin() ?? false,
+                    'manageUsers' => $user?->isSuperAdmin() ?? false,
                     'useSupervisorPin' => $user?->canBypassPin() ?? false,
                 ],
             ],

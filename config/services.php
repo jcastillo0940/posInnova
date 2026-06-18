@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'woocommerce' => [
+        'products_csv_path' => env('WOOCOMMERCE_PRODUCTS_CSV_PATH'),
+        'orders_csv_path' => env('WOOCOMMERCE_ORDERS_CSV_PATH'),
+    ],
+
 ];

@@ -6,7 +6,6 @@ use App\Models\Branch;
 use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\Customer;
-use App\Models\Product;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -77,42 +76,8 @@ class DatabaseSeeder extends Seeder
             'status' => 'active',
         ]);
 
-        Product::insert([
-            [
-                'name' => 'Labial mate nude',
-                'barcode' => '750100000001',
-                'category' => 'Labiales',
-                'price' => 6500,
-                'cost' => 3225,
-                'stock' => 24,
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'name' => 'Base líquida 24h',
-                'barcode' => '750100000002',
-                'category' => 'Bases',
-                'price' => 9360,
-                'cost' => 4888,
-                'stock' => 18,
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'name' => 'Pestañas efecto natural',
-                'barcode' => '750100000003',
-                'category' => 'Accesorios',
-                'price' => 4550,
-                'cost' => 1612,
-                'stock' => 36,
-                'is_active' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
-
+        $this->call(WooCommerceProductsSeeder::class);
+        $this->call(HistoricalOrdersSeeder::class);
         $this->call(OperationsSeeder::class);
     }
 }

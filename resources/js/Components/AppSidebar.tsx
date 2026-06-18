@@ -12,6 +12,8 @@ export const appNavigation = [
     { name: 'Productos', route: 'admin.inventory.products', icon: 'inventory_2', permission: 'accessProducts' },
     { name: 'Operaciones', route: 'admin.operations.index', icon: 'group', permission: 'accessCustomers' },
     { name: 'Corte de Caja', route: 'admin.cash.index', icon: 'analytics', permission: 'accessCash' },
+    { name: 'Importaciones', route: 'admin.imports.index', icon: 'database_upload', permission: 'manageUsers' },
+    { name: 'Usuarios', route: 'admin.users.index', icon: 'manage_accounts', permission: 'manageUsers' },
 ] satisfies Array<{
     name: string;
     route: string;

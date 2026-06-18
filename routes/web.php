@@ -10,9 +10,11 @@ use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OperationsActionController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ProductImportController;
+use App\Http\Controllers\Admin\DataImportController;
 use App\Http\Controllers\Admin\PurchaseOrderController;
 use App\Http\Controllers\Admin\ApprovalRequestController;
 use App\Http\Controllers\Admin\SaleReversalController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\PosSaleController;
 use App\Http\Controllers\PosCreditPaymentController;
 use App\Http\Controllers\SupervisorPinController;
@@ -39,6 +41,11 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::post('/settings/exchange-rate/sync', [SettingsController::class, 'syncExchangeRate'])->name('settings.exchange-rate.sync');
+    Route::get('/imports', [DataImportController::class, 'index'])->name('imports.index');
+    Route::get('/imports/backup', [DataImportController::class, 'backup'])->name('imports.backup');
+    Route::post('/imports/products', [DataImportController::class, 'importProducts'])->name('imports.products');
+    Route::post('/imports/products-xml', [DataImportController::class, 'importProductsXml'])->name('imports.products-xml');
+    Route::post('/imports/historical-orders', [DataImportController::class, 'importHistorical'])->name('imports.historical-orders');
     Route::get('/products/import', [ProductImportController::class, 'index'])->name('products.import.index');
     Route::post('/products/import', [ProductImportController::class, 'store'])->name('products.import.store');
     Route::get('/cash', [CashSessionController::class, 'index'])->name('cash.index');
@@ -66,6 +73,12 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/approvals/{approvalRequest}/approve', [ApprovalRequestController::class, 'approve'])->name('approvals.approve');
     Route::post('/approvals/{approvalRequest}/reject', [ApprovalRequestController::class, 'reject'])->name('approvals.reject');
     Route::post('/sales/{sale}/void', [SaleReversalController::class, 'store'])->middleware('supervisor.pin')->name('sales.void');
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::patch('/users/{user}/toggle', [UserController::class, 'toggle'])->name('users.toggle');
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
+    Route::post('/users/{user}/reset-pin', [UserController::class, 'resetPin'])->name('users.reset-pin');
 });
 
 Route::middleware('auth')->prefix('supervisor')->name('supervisor.')->group(function () {

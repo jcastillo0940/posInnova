@@ -1,4 +1,4 @@
-import AppSidebar from '@/Components/AppSidebar';
+﻿import AppSidebar from '@/Components/AppSidebar';
 import { PageProps } from '@/types';
 import { formatMoney, usdToCrc } from '@/lib/money';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -45,6 +45,7 @@ type PendingSalesSnapshot = {
 };
 
 type RecentSale = {
+    id: number;
     number: string;
     total: string;
     status: string;
@@ -68,6 +69,18 @@ type Props = {
     productsCount: number;
     productsLowStock: number;
     recentSales: RecentSale[];
+    approvalRequests?: Array<{
+        id: number;
+        sale_id: number | null;
+        sale_number: string | null;
+        type: string;
+        status: string;
+        requested_amount: number | null;
+        approved_amount: number | null;
+        decision_notes: string | null;
+        reason: string | null;
+        decided_at: string | null;
+    }>;
     products: Product[];
     customers: Customer[];
     priceLists: Array<{ id: number; name: string; type: string; multiplier: number }>;
@@ -106,7 +119,7 @@ type PausedSale = {
 type SaleMode = 'cash' | 'credit' | 'layaway' | 'quote';
 type PaymentFlow = 'cash' | 'credit' | 'mixed';
 
-export default function Dashboard({ openSession, products, customers, priceLists, promotions, currency, exchangeRateUsdCrc, autoPrintReceipts, flash, recentSales }: Props) {
+export default function Dashboard({ openSession, products, customers, priceLists, promotions, currency, exchangeRateUsdCrc, autoPrintReceipts, flash, recentSales, approvalRequests = [] }: Props) {
     const { processing } = useForm({});
     const page = usePage<PageProps>().props as PageProps & { approvals?: { pendingCount?: number } };
     const { permissions } = page.auth;
@@ -159,6 +172,8 @@ export default function Dashboard({ openSession, products, customers, priceLists
     const [approvalWatchSale, setApprovalWatchSale] = useState<string | null>(null);
     const [approvalWatchResolved, setApprovalWatchResolved] = useState<string | null>(null);
     const [approvalWatchState, setApprovalWatchState] = useState<'pending_approval' | 'approved' | 'rejected' | null>(null);
+    const [selectedApprovalSale, setSelectedApprovalSale] = useState<string | null>(null);
+    const [approvedSaleToFinalize, setApprovedSaleToFinalize] = useState<number | null>(null);
     const approvalSound = useRef<AudioContext | null>(null);
     const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
     const snapshot = readPosSnapshot<{
@@ -396,6 +411,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
             setApprovalWatchSale(pendingSale.number);
             setApprovalWatchState('pending_approval');
             setApprovalWatchResolved(null);
+            setSelectedApprovalSale(pendingSale.number);
             setStatusBanner(`La venta ${pendingSale.number} esta esperando aprobacion.`);
         }
 
@@ -413,6 +429,28 @@ export default function Dashboard({ openSession, products, customers, priceLists
             }
         }
     }, [recentSales, approvalWatchSale, approvalWatchResolved]);
+
+    const pendingApprovalSales = recentSales.filter((sale) => sale.status === 'pending_approval');
+    const approvalBySaleId = approvalRequests.reduce<Record<number, (typeof approvalRequests)[number]>>((acc, request) => {
+        if (request.sale_id !== null) acc[request.sale_id] = request;
+        return acc;
+    }, {});
+    const activeApprovalSale = selectedApprovalSale
+        ? recentSales.find((sale) => sale.number === selectedApprovalSale) ?? null
+        : recentSales.find((sale) => sale.status === 'pending_approval') ?? null;
+    const activeApprovalRequest = activeApprovalSale ? approvalBySaleId[activeApprovalSale.id] ?? null : null;
+    const activeApprovalState = activeApprovalRequest?.status === 'approved'
+        ? 'approved'
+        : activeApprovalRequest?.status === 'rejected'
+            ? 'rejected'
+            : activeApprovalSale?.status === 'pending_approval'
+                ? 'pending_approval'
+                : null;
+    const activeApprovalMessage = activeApprovalState === 'approved'
+        ? `La venta ${activeApprovalSale?.number ?? ''} ya fue aprobada por el admin.`
+        : activeApprovalState === 'rejected'
+            ? `La venta ${activeApprovalSale?.number ?? ''} fue rechazada por el admin.`
+            : `La venta ${activeApprovalSale?.number ?? ''} esta esperando aprobacion.`;
 
     useEffect(() => {
         if (!approvalWatchSale || approvalWatchResolved) return;
@@ -434,6 +472,30 @@ export default function Dashboard({ openSession, products, customers, priceLists
         setPaymentError('');
 
         if (!cart.length || !openSession) return;
+        if (approvedSaleToFinalize) {
+            router.post(route('pos.sale.finalize-approved', approvedSaleToFinalize), {}, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setApprovedSaleToFinalize(null);
+                    setCart([]);
+                    setCustomerId('');
+                    setDiscountTotal('0.00');
+                    setPriceListId('');
+                    setPromotionId('');
+                    setCashPaid('');
+                    setCardPaid('');
+                    setCreditPaid('');
+                    setUsdPaid('');
+                    setNotes('');
+                    setPaymentDialogOpen(false);
+                    setSaleMode('cash');
+                    setPaymentFlow('cash');
+                    setStatusBanner('Venta autorizada finalizada correctamente.');
+                },
+                onError: () => setPaymentError('No se pudo finalizar la venta autorizada.'),
+            });
+            return;
+        }
         if ((saleMode === 'credit' || paymentIsCredit || paymentIsMixed) && !selectedCustomer) {
             setPaymentError('Selecciona un cliente para vender a credito o mixto.');
             return;
@@ -592,6 +654,46 @@ export default function Dashboard({ openSession, products, customers, priceLists
         setActivePauseId(null);
     };
 
+    const loadApprovedSale = async (saleId: number) => {
+        const response = await fetch(route('pos.sale.approval', saleId), {
+            headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const payload = data.payload ?? {};
+        const items = Array.isArray(payload.items) ? payload.items : [];
+
+        setCart(items.map((item: { product_id: number; quantity: number; unit_price?: number }) => {
+            const product = catalogProducts.find((entry) => entry.id === item.product_id);
+            return {
+                product_id: item.product_id,
+                name: product?.name ?? `Producto ${item.product_id}`,
+                barcode: product?.barcode ?? '',
+                price: Number(item.unit_price ?? product?.price ?? 0),
+                quantity: Number(item.quantity ?? 1),
+            };
+        }));
+        setCustomerId(data.sale?.customer_id ?? '');
+        setSaleMode((payload.sale_mode ?? 'cash') as SaleMode);
+        const subtotal = items.reduce((sum: number, item: { quantity: number; unit_price?: number }) => sum + Number(item.unit_price ?? 0) * Number(item.quantity ?? 0), 0);
+        const approvedAmount = Number(data.approval?.approved_amount ?? subtotal);
+        const saleMode = (payload.sale_mode ?? 'cash') as SaleMode;
+        const discountValue = data.approval?.type === 'discount_override'
+            ? Math.max(0, approvedAmount)
+            : Number(payload.discount_total ?? 0);
+        setDiscountTotal(discountValue.toFixed(2));
+        setCashPaid(Number(payload.cash_paid ?? 0).toFixed(2));
+        setCardPaid(Number(payload.card_paid ?? 0).toFixed(2));
+        setCreditPaid(Number(payload.credit_paid ?? 0).toFixed(2));
+        setUsdPaid(Number(payload.usd_paid ?? 0).toFixed(2));
+        setNotes(payload.notes ?? '');
+        setApprovedSaleToFinalize(data.sale?.id ?? saleId);
+        setPaymentFlow(saleMode === 'credit' ? 'credit' : 'cash');
+        setPaymentDialogOpen(true);
+        setStatusBanner(`La venta ${data.sale?.number ?? saleId} ya puede finalizarse con el monto autorizado.`);
+    };
+
     const removePausedSale = (id: string) => {
         setPausedSales((current) => current.filter((sale) => sale.id !== id));
         setActivePauseId((current) => (current === id ? null : current));
@@ -714,61 +816,111 @@ export default function Dashboard({ openSession, products, customers, priceLists
             {statusBanner && (
                 <div className="fixed inset-x-0 top-0 z-[75] flex justify-center px-4 pt-4">
                     <div className={`w-full max-w-3xl rounded-3xl border px-5 py-4 shadow-2xl ${
-                        approvalWatchState === 'approved'
+                        activeApprovalState === 'approved'
                             ? 'border-emerald-200 bg-emerald-50'
-                            : approvalWatchState === 'rejected'
+                            : activeApprovalState === 'rejected'
                                 ? 'border-rose-200 bg-rose-50'
                                 : 'border-amber-200 bg-amber-50'
                     }`}>
                         <div className="flex items-start gap-3">
                             <span className={`material-symbols-outlined mt-0.5 text-[24px] ${
-                                approvalWatchState === 'approved'
+                                activeApprovalState === 'approved'
                                     ? 'text-emerald-700'
-                                    : approvalWatchState === 'rejected'
+                                    : activeApprovalState === 'rejected'
                                         ? 'text-rose-700'
                                         : 'text-amber-700'
                             }`}>
-                                {approvalWatchState === 'approved' ? 'task_alt' : approvalWatchState === 'rejected' ? 'cancel' : 'hourglass_top'}
+                                {activeApprovalState === 'approved' ? 'task_alt' : activeApprovalState === 'rejected' ? 'cancel' : 'hourglass_top'}
                             </span>
                             <div className="min-w-0">
                                 <p className={`text-base font-semibold ${
-                                    approvalWatchState === 'approved'
+                                    activeApprovalState === 'approved'
                                         ? 'text-emerald-900'
-                                        : approvalWatchState === 'rejected'
+                                        : activeApprovalState === 'rejected'
                                             ? 'text-rose-900'
                                             : 'text-amber-900'
                                 }`}>
-                                    {approvalWatchState === 'approved'
+                                    {activeApprovalState === 'approved'
                                         ? 'Venta aprobada, continuar'
-                                        : approvalWatchState === 'rejected'
+                                        : activeApprovalState === 'rejected'
                                             ? 'Venta rechazada, rehacer'
                                             : 'Venta pendiente de aprobacion'}
                                 </p>
                                 <p className={`text-sm ${
-                                    approvalWatchState === 'approved'
+                                    activeApprovalState === 'approved'
                                         ? 'text-emerald-800'
-                                        : approvalWatchState === 'rejected'
+                                        : activeApprovalState === 'rejected'
                                             ? 'text-rose-800'
                                             : 'text-amber-800'
-                                }`}>{statusBanner}</p>
+                                }`}>{activeApprovalMessage}</p>
+                                {activeApprovalSale && (
+                                    <div className="mt-3 rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                                            <span className="font-semibold text-on-surface">Venta #{activeApprovalSale.number}</span>
+                                            <span className="text-on-surface-variant">Total {money(activeApprovalSale.total)}</span>
+                                            <span className="text-on-surface-variant">Estado {activeApprovalSale.status}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.reload({ only: ['recentSales', 'approvals'] })}
+                                                className="rounded-full border border-outline-variant bg-surface px-3 py-1 text-xs font-semibold text-on-surface hover:bg-surface-container-low"
+                                            >
+                                                Refrescar esta venta
+                                            </button>
+                                            {activeApprovalState === 'approved' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (approvalWatchSale) {
+                                                            const approvedSale = recentSales.find((sale) => sale.number === approvalWatchSale);
+                                                            if (approvedSale) {
+                                                                void loadApprovedSale(approvedSale.id);
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                                                >
+                                                    Finalizar venta
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setStatusBanner(null);
-                                    setApprovalWatchState(null);
-                                }}
-                                className={`ml-auto rounded-full p-1 ${
-                                    approvalWatchState === 'approved'
-                                        ? 'text-emerald-900 hover:bg-emerald-100'
-                                        : approvalWatchState === 'rejected'
-                                            ? 'text-rose-900 hover:bg-rose-100'
-                                            : 'text-amber-900 hover:bg-amber-100'
-                                }`}
-                                aria-label="Cerrar aviso"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">close</span>
-                            </button>
+                            <div className="ml-auto flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        router.reload({ only: ['recentSales', 'approvals'] });
+                                        setApprovalModalOpen(true);
+                                    }}
+                                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                        activeApprovalState === 'approved'
+                                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                            : activeApprovalState === 'rejected'
+                                                ? 'bg-rose-600 text-white hover:bg-rose-700'
+                                                : 'bg-amber-600 text-white hover:bg-amber-700'
+                                    }`}
+                                >
+                                    {activeApprovalState === 'approved' ? 'Ver aprobado' : activeApprovalState === 'rejected' ? 'Ver rechazo' : 'Refrescar aprobación'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setStatusBanner(null);
+                                        setApprovalWatchState(null);
+                                    }}
+                                    className={`rounded-full p-1 ${
+                                        activeApprovalState === 'approved'
+                                            ? 'text-emerald-900 hover:bg-emerald-100'
+                                            : activeApprovalState === 'rejected'
+                                                ? 'text-rose-900 hover:bg-rose-100'
+                                                : 'text-amber-900 hover:bg-amber-100'
+                                    }`}
+                                    aria-label="Cerrar aviso"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">close</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -791,10 +943,27 @@ export default function Dashboard({ openSession, products, customers, priceLists
                         <div className="mt-5 flex gap-3">
                             <button
                                 type="button"
-                                className="flex-1 rounded-2xl bg-primary px-4 py-3 text-body-sm font-semibold text-on-primary"
-                                onClick={() => setApprovalModalOpen(false)}
+                                className="flex-1 rounded-2xl border border-outline-variant bg-surface px-4 py-3 text-body-sm font-semibold text-on-surface hover:bg-surface-container-low"
+                                onClick={() => router.reload({ only: ['recentSales', 'approvals'] })}
                             >
-                                Entendido
+                                Refrescar estado
+                            </button>
+                            <button
+                                type="button"
+                                className="flex-1 rounded-2xl bg-primary px-4 py-3 text-body-sm font-semibold text-on-primary"
+                                onClick={() => {
+                                    if (activeApprovalState === 'approved' && approvalWatchSale) {
+                                        const approvedSale = recentSales.find((sale) => sale.number === approvalWatchSale);
+                                        if (approvedSale) {
+                                            void loadApprovedSale(approvedSale.id);
+                                        }
+                                    } else {
+                                        router.reload({ only: ['recentSales', 'approvals'] });
+                                    }
+                                    setApprovalModalOpen(false);
+                                }}
+                            >
+                                {activeApprovalState === 'approved' ? 'Finalizar venta' : 'Entendido'}
                             </button>
                         </div>
                     </div>
@@ -850,6 +1019,96 @@ export default function Dashboard({ openSession, products, customers, priceLists
                             </div>
                         </div>
                     </header>
+
+                    {pendingApprovalSales.length > 0 && (
+                        <section className="border-b border-outline-variant bg-surface-container/60 px-xl py-4">
+                            <div className="mb-3 flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-sm font-semibold text-on-surface">Ventas en espera</p>
+                                    <p className="text-xs text-on-surface-variant">
+                                        Toca una venta para verla arriba y refrescar su estado.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => router.reload({ only: ['recentSales', 'approvals'] })}
+                                    className="rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs font-semibold text-on-surface hover:bg-surface-container-low"
+                                >
+                                    Refrescar cola
+                                </button>
+                            </div>
+                            <div className="flex gap-3 overflow-x-auto pb-1">
+                                {pendingApprovalSales.map((sale) => {
+                                    const isActive = sale.number === activeApprovalSale?.number;
+                                    const activeStateLabel = activeApprovalState === 'approved'
+                                        ? 'Aprobada'
+                                        : activeApprovalState === 'rejected'
+                                            ? 'Rechazada'
+                                            : 'Pendiente';
+
+                                    return (
+                                        <button
+                                            key={sale.number}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedApprovalSale(sale.number);
+                                                setApprovalWatchSale(sale.number);
+                                                setApprovalWatchState('pending_approval');
+                                                setApprovalWatchResolved(null);
+                                                setApprovalModalOpen(true);
+                                                setStatusBanner(`La venta ${sale.number} esta esperando aprobacion.`);
+                                            }}
+                                            className={`min-w-[230px] rounded-2xl border px-4 py-3 text-left shadow-sm transition ${
+                                                isActive
+                                                    ? activeApprovalState === 'approved'
+                                                        ? 'border-emerald-300 bg-emerald-50'
+                                                        : activeApprovalState === 'rejected'
+                                                            ? 'border-rose-300 bg-rose-50'
+                                                            : 'border-amber-300 bg-amber-50'
+                                                    : 'border-outline-variant bg-surface hover:bg-surface-container-low'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-on-surface">Venta #{sale.number}</p>
+                                                    <p className="text-xs text-on-surface-variant">
+                                                        {sale.created_at ? new Date(sale.created_at).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sin fecha'}
+                                                    </p>
+                                                </div>
+                                                <span className={`material-symbols-outlined text-[20px] ${isActive ? 'text-amber-700' : 'text-outline'}`}>hourglass_top</span>
+                                            </div>
+                                            <div className="mt-3 flex items-end justify-between gap-3">
+                                                <div>
+                                                    <p className="text-[11px] uppercase tracking-[0.2em] text-on-surface-variant">Total</p>
+                                                    <p className="text-lg font-black text-on-surface">{money(sale.total)}</p>
+                                                </div>
+                                                <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                                                    isActive
+                                                        ? activeApprovalState === 'approved'
+                                                            ? 'bg-emerald-100 text-emerald-800'
+                                                            : activeApprovalState === 'rejected'
+                                                                ? 'bg-rose-100 text-rose-800'
+                                                                : 'bg-amber-100 text-amber-800'
+                                                        : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {isActive ? activeStateLabel : 'Pendiente'}
+                                                </span>
+                                            </div>
+                                            <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-white/70 px-3 py-2 text-xs text-on-surface-variant">
+                                                {isActive
+                                                    ? activeApprovalState === 'approved'
+                                                        ? 'Lista para finalizar con el monto autorizado'
+                                                        : activeApprovalState === 'rejected'
+                                                            ? 'Debe rehacerse antes de continuar'
+                                                            : 'Seleccionada para seguimiento'
+                                                    : 'Ver estado y refrescar'}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
 
                     <div className="relative flex min-h-0 flex-1 overflow-hidden">
                         {posLocked ? (
@@ -1065,7 +1324,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                             </div>
 
                                                             <div className="mt-1 text-xs text-on-surface-variant">
-                                                                {sale.cart.length} item(s) · {sale.saleMode === 'credit' ? 'Crédito' : sale.saleMode === 'layaway' ? 'Apartado' : sale.saleMode === 'quote' ? 'Cotización' : 'Contado'}
+                                                                {sale.cart.length} item(s) Â· {sale.saleMode === 'credit' ? 'CrÃ©dito' : sale.saleMode === 'layaway' ? 'Apartado' : sale.saleMode === 'quote' ? 'CotizaciÃ³n' : 'Contado'}
                                                             </div>
 
                                                             <div className="mt-3 flex items-center justify-between gap-2">
@@ -1264,7 +1523,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                         <input
                                                             ref={customerSearchRef}
                                                             className="w-full rounded border border-outline-variant px-3 py-2"
-                                                            placeholder="Escribe cédula o nombre"
+                                                            placeholder="Escribe cÃ©dula o nombre"
                                                             value={paymentCustomerQuery}
                                                             onChange={(event) => setPaymentCustomerQuery(event.target.value)}
                                                         />
@@ -1331,7 +1590,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                         <input
                                                             ref={customerSearchRef}
                                                             className="w-full rounded border border-outline-variant px-3 py-2"
-                                                            placeholder="Escribe cédula o nombre"
+                                                            placeholder="Escribe cÃ©dula o nombre"
                                                             value={paymentCustomerQuery}
                                                             onChange={(event) => setPaymentCustomerQuery(event.target.value)}
                                                         />
@@ -1460,7 +1719,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className="font-headline-lg text-headline-md font-bold">Abono a factura</h3>
-                                    <p className="font-body-md text-body-sm text-on-surface-variant">Selecciona cliente, factura(s) y modo de aplicación.</p>
+                                    <p className="font-body-md text-body-sm text-on-surface-variant">Selecciona cliente, factura(s) y modo de aplicaciÃ³n.</p>
                                 </div>
                                 <button type="button" className="rounded-full p-2 hover:bg-surface-container" onClick={() => setInvoiceDialogOpen(false)}>
                                     <span className="material-symbols-outlined">close</span>
@@ -1473,7 +1732,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                         <label className="mb-2 block text-sm font-semibold text-on-surface">Cliente</label>
                                         <input
                                             className="w-full rounded border border-outline-variant px-3 py-2"
-                                            placeholder="Buscar por cédula o nombre"
+                                            placeholder="Buscar por cÃ©dula o nombre"
                                             value={invoiceCustomerQuery}
                                             onChange={(event) => setInvoiceCustomerQuery(event.target.value)}
                                         />
@@ -1492,12 +1751,12 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                 >
                                                     <span>
                                                         <div className="font-semibold">{customer.name}</div>
-                                                        <div className="text-xs text-on-surface-variant">{customer.document || 'Sin cédula'}</div>
+                                                        <div className="text-xs text-on-surface-variant">{customer.document || 'Sin cÃ©dula'}</div>
                                                     </span>
                                                     <span className="text-xs text-on-surface-variant">Saldo {money(customer.credit_balance)}</span>
                                                 </button>
                                             )) : (
-                                                <div className="p-3 text-sm text-on-surface-variant">No se encontró el cliente.</div>
+                                                <div className="p-3 text-sm text-on-surface-variant">No se encontrÃ³ el cliente.</div>
                                             )}
                                         </div>
                                     </div>
@@ -1505,7 +1764,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                     <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4">
                                         <div className="mb-3 flex gap-2">
                                             <button type="button" className={`rounded px-3 py-2 text-sm font-semibold ${invoiceMode === 'auto' ? 'bg-secondary text-on-secondary' : 'bg-white border border-outline-variant'}`} onClick={() => setInvoiceMode('auto')}>
-                                                Automático
+                                                AutomÃ¡tico
                                             </button>
                                             <button type="button" className={`rounded px-3 py-2 text-sm font-semibold ${invoiceMode === 'manual' ? 'bg-secondary text-on-secondary' : 'bg-white border border-outline-variant'}`} onClick={() => setInvoiceMode('manual')}>
                                                 Manual
@@ -1531,7 +1790,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                     <thead className="sticky top-0 z-10 bg-surface-container-low">
                                                         <tr className="border-b border-outline-variant text-left text-[10px] uppercase tracking-[0.18em] text-on-surface-variant">
                                                             <th className="w-12 px-3 py-3"></th>
-                                                            <th className="px-3 py-3">Número</th>
+                                                            <th className="px-3 py-3">NÃºmero</th>
                                                             <th className="px-3 py-3">Fecha</th>
                                                             <th className="px-3 py-3 text-right">Total</th>
                                                             <th className="px-3 py-3 text-right">Abonado</th>
@@ -1603,7 +1862,7 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                     <span>{money(sale.applied)}</span>
                                                 </div>
                                             )) : (
-                                                <div className="text-on-surface-variant">Escribe un monto para ver la distribución.</div>
+                                                <div className="text-on-surface-variant">Escribe un monto para ver la distribuciÃ³n.</div>
                                             )}
                                         </div>
                                         <div className="mt-3 flex items-center justify-between font-semibold">
@@ -1728,3 +1987,4 @@ function PaymentCard({
         </button>
     );
 }
+

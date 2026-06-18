@@ -173,6 +173,16 @@ function ApprovalSection({
                         const kind = labelForType(request.type);
                         const isCreditRequest = request.type === 'credit_overlimit';
                         const isDiscountRequest = request.type === 'discount_override';
+                        const approvedCredit = isCreditRequest
+                            ? (request.approved_amount ?? request.credit_limit)
+                            : null;
+                        const approvedDiscount = isDiscountRequest && request.approved_amount !== null ? request.approved_amount : null;
+                        const finalCreditBalance = isCreditRequest && approvedCredit !== null
+                            ? Math.max(0, request.requested_amount - approvedCredit)
+                            : null;
+                        const finalTotal = isDiscountRequest && approvedDiscount !== null
+                            ? Math.max(0, request.requested_amount - approvedDiscount)
+                            : null;
                         const approvalLabel = isCreditRequest ? 'Credito autorizado' : isDiscountRequest ? 'Descuento autorizado' : 'Monto aprobado';
 
                         return (
@@ -226,15 +236,15 @@ function ApprovalSection({
 
                                 {isCreditRequest ? (
                                     <div className="mt-4 grid gap-3 md:grid-cols-3">
-                                        <Stat label="Limite de credito" value={request.credit_limit !== null ? money(request.credit_limit) : 'N/D'} />
-                                        <Stat label="Credito actual" value={request.current_credit !== null ? money(request.current_credit) : 'N/D'} />
-                                        <Stat label="Credito despues" value={request.pending_credit !== null ? money(request.pending_credit) : 'N/D'} />
+                                        <Stat label="Credito pedido" value={money(request.requested_amount)} />
+                                        <Stat label="Credito autorizado" value={approvedCredit !== null ? money(approvedCredit) : 'Pendiente'} />
+                                        <Stat label="Saldo final" value={finalCreditBalance !== null ? money(finalCreditBalance) : 'Pendiente'} />
                                     </div>
                                 ) : isDiscountRequest ? (
                                     <div className="mt-4 grid gap-3 md:grid-cols-3">
-                                        <Stat label="Monto de venta" value={money(request.requested_amount)} />
                                         <Stat label="Descuento pedido" value={request.requested_discount !== null ? money(request.requested_discount) : 'N/D'} />
-                                        <Stat label="Descuento maximo" value={request.max_discount !== null ? money(request.max_discount) : 'N/D'} />
+                                        <Stat label="Descuento autorizado" value={approvedDiscount !== null ? money(approvedDiscount) : 'Pendiente'} />
+                                        <Stat label="Total final a cobrar" value={finalTotal !== null ? money(finalTotal) : 'Pendiente'} />
                                     </div>
                                 ) : (
                                     <div className="mt-4 grid gap-3 md:grid-cols-2">

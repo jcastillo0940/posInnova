@@ -42,63 +42,11 @@ class ApprovalRequestController extends Controller
             'approved_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        DB::transaction(function () use ($request, $approvalRequest, $inventory, $data) {
+        DB::transaction(function () use ($request, $approvalRequest, $data) {
             $sale = $approvalRequest->sale()->with(['items.product', 'customer'])->firstOrFail();
             abort_unless($sale->status === 'pending_approval', 422, 'La venta ya fue procesada.');
             $payload = $approvalRequest->payload ?? [];
-            $saleMode = $payload['sale_mode'] ?? 'cash';
             $approvedAmount = (float) ($data['approved_amount'] ?? $approvalRequest->requested_amount ?? $sale->total);
-            $cashPaid = (float) ($payload['cash_paid'] ?? 0);
-            $cardPaid = (float) ($payload['card_paid'] ?? 0);
-            $creditPaid = (float) ($payload['credit_paid'] ?? 0);
-            $usdPaid = (float) ($payload['usd_paid'] ?? 0);
-            $usdPaidCrc = (float) ($sale->usd_paid_crc ?? 0);
-
-            foreach ($sale->items as $item) {
-                $inventory->move(
-                    product: $item->product,
-                    type: 'sale',
-                    quantity: -(int) $item->quantity,
-                    user: $request->user(),
-                    referenceType: Sale::class,
-                    referenceId: $sale->id,
-                    context: ['sale_number' => $sale->number, 'approved_from' => 'remote'],
-                );
-            }
-
-            $sale->update([
-                'status' => $saleMode === 'credit' ? 'credit' : ($saleMode === 'layaway' ? 'layaway' : 'completed'),
-                'paid_amount' => $approvedAmount,
-                'change_amount' => $saleMode === 'cash' ? max(0, ($cashPaid + $usdPaidCrc) - (float) $sale->total) : 0,
-            ]);
-
-            $session = CashSession::query()->find($sale->cash_session_id);
-            if ($session && $saleMode === 'cash') {
-                $session->increment('current_cash', $cashPaid + $usdPaidCrc);
-            }
-
-            if ($saleMode === 'credit' && $sale->customer) {
-                $balance = max(0, (float) $sale->total - ($cashPaid + $cardPaid + $creditPaid + $usdPaidCrc));
-                $account = CreditAccount::query()->firstOrCreate(
-                    ['customer_id' => $sale->customer->id],
-                    ['credit_limit' => 0, 'balance' => 0, 'status' => 'active']
-                );
-                $account->increment('balance', $balance);
-                $sale->customer->increment('credit_balance', $balance);
-            }
-
-            if ($saleMode === 'layaway' && $sale->customer) {
-                Layaway::create([
-                    'customer_id' => $sale->customer->id,
-                    'sale_id' => $sale->id,
-                    'user_id' => $request->user()->id,
-                    'number' => 'APAR-' . str_pad((string) (Layaway::query()->count() + 1), 6, '0', STR_PAD_LEFT),
-                    'deposit' => $cashPaid + $usdPaidCrc,
-                    'balance' => max(0, (float) $sale->total - ($cashPaid + $usdPaidCrc)),
-                    'status' => 'open',
-                    'due_date' => now()->addDays(15),
-                ]);
-            }
 
             $approvalRequest->update([
                 'status' => 'approved',
@@ -116,7 +64,8 @@ class ApprovalRequestController extends Controller
                 'context' => [
                     'approval_request_id' => $approvalRequest->id,
                     'approved_amount' => $approvedAmount,
-                    'sale_mode' => $saleMode,
+                    'sale_mode' => $payload['sale_mode'] ?? 'cash',
+                    'approval_type' => $approvalRequest->type,
                 ],
             ]);
         });

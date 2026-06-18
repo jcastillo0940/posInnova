@@ -26,6 +26,8 @@ Route::get('/', function () {
 
 Route::get('/dashboard', DashboardController::class)->middleware(['auth'])->name('dashboard');
 Route::post('/pos/sales', [PosSaleController::class, 'store'])->middleware(['auth'])->name('pos.sale.store');
+Route::get('/pos/sales/{sale}/approval', [PosSaleController::class, 'approval'])->middleware(['auth'])->name('pos.sale.approval');
+Route::post('/pos/sales/{sale}/finalize-approved', [PosSaleController::class, 'finalizeApproved'])->middleware(['auth'])->name('pos.sale.finalize-approved');
 Route::get('/pos/customers/{customer}/pending-sales', [PosCreditPaymentController::class, 'pendingSales'])->middleware(['auth'])->name('pos.credit.pending-sales');
 Route::post('/pos/credit-payments', [PosCreditPaymentController::class, 'store'])->middleware(['auth'])->name('pos.credit-payments.store');
 Route::get('/pos/credit-payments/{creditTransaction}/ticket', [PosCreditPaymentController::class, 'ticket'])->middleware(['auth'])->name('pos.credit-payments.ticket');

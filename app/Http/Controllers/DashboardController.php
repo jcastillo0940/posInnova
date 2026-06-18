@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashSession;
+use App\Models\ApprovalRequest;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
@@ -32,10 +33,29 @@ class DashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(fn (Sale $sale) => [
+                'id' => $sale->id,
                 'number' => $sale->number,
                 'total' => $sale->total,
                 'status' => $sale->status,
                 'created_at' => $sale->created_at?->format('d/m/Y h:i a'),
+            ]);
+
+        $recentApprovalRequests = ApprovalRequest::query()
+            ->with(['sale'])
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (ApprovalRequest $request) => [
+                'id' => $request->id,
+                'sale_id' => $request->sale_id,
+                'sale_number' => $request->sale?->number,
+                'type' => $request->type,
+                'status' => $request->status,
+                'requested_amount' => $request->requested_amount !== null ? (float) $request->requested_amount : null,
+                'approved_amount' => $request->approved_amount !== null ? (float) $request->approved_amount : null,
+                'decision_notes' => $request->decision_notes,
+                'reason' => $request->reason,
+                'decided_at' => $request->decided_at?->format('d/m/Y h:i a'),
             ]);
 
         return Inertia::render('Dashboard', [
@@ -55,6 +75,7 @@ class DashboardController extends Controller
             'productsCount' => Product::query()->where('is_active', true)->count(),
             'productsLowStock' => Product::query()->where('stock', '<=', 10)->count(),
             'recentSales' => $recentSales,
+            'approvalRequests' => $recentApprovalRequests,
             'products' => Product::query()
                 ->where('is_active', true)
                 ->orderBy('name')

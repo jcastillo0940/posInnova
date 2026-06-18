@@ -8,6 +8,7 @@ export interface User {
 
 export interface AuthPermissions {
     accessPos: boolean;
+    accessOverview: boolean;
     accessReports: boolean;
     accessProducts: boolean;
     accessCustomers: boolean;

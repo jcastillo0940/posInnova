@@ -74,7 +74,7 @@ class HistoricalOrdersImporter
                 ['name' => 'Cliente Mostrador', 'credit_limit' => 0, 'credit_balance' => 0, 'status' => 'active']
             );
             $user = User::query()->orderBy('id')->firstOrFail();
-            $sessionId = (int) \DB::table('cash_sessions')->orderBy('id')->value('id');
+            $sessionId = \DB::table('cash_sessions')->orderBy('id')->value('id');
         }
 
         DB::beginTransaction();

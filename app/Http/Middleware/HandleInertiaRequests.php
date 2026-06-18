@@ -39,12 +39,13 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
-                'credit_payment_ticket' => fn () => $request->session()->get('credit_payment_ticket'),
+                'credit_payment_ticket' => fn () => $request->session()->pull('credit_payment_ticket'),
             ],
             'auth' => [
                 'user' => $user,
                 'permissions' => [
-                    'accessPos' => (bool) $user,
+                    'accessPos' => $user ? in_array($user->role, ['cashier', 'seller'], true) : false,
+                    'accessOverview' => $user ? ($user->isAdmin() || in_array($user->role, ['supervisor', 'accountant'], true)) : false,
                     'accessReports' => $user?->isAdmin() ?? false,
                     'accessProducts' => $user?->isAdmin() ?? false,
                     'accessCustomers' => (bool) $user,

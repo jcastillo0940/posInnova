@@ -1,3 +1,9 @@
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|mjs|css|woff|woff2|ttf|otf|eot)$">
+        Header set Access-Control-Allow-Origin "*"
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

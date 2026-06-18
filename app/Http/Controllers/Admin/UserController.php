@@ -34,6 +34,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'role' => ['required', Rule::in($this->roles())],
+            'password' => ['nullable', 'string', 'min:6'],
         ]);
 
         User::create([
@@ -41,7 +42,7 @@ class UserController extends Controller
             'email' => $data['email'],
             'role' => $data['role'],
             'is_active' => true,
-            'password' => Hash::make('1234'),
+            'password' => Hash::make($data['password'] ?? '1234'),
             'pin_hash' => Hash::make('1234'),
         ]);
 
@@ -84,6 +85,21 @@ class UserController extends Controller
         ]);
 
         return back()->with('success', 'Contraseña restablecida a 1234.');
+    }
+
+    public function setPassword(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $user->update([
+            'password' => Hash::make($data['password']),
+        ]);
+
+        return back()->with('success', "Contraseña de {$user->name} actualizada correctamente.");
     }
 
     public function resetPin(Request $request, User $user): RedirectResponse

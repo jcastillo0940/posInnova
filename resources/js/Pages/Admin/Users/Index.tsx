@@ -22,6 +22,7 @@ type CreateForm = {
     name: string;
     email: string;
     role: string;
+    password: string;
 };
 
 export default function UsersIndex({ users, roles }: Props) {
@@ -30,6 +31,7 @@ export default function UsersIndex({ users, roles }: Props) {
         name: '',
         email: '',
         role: roles[0] ?? 'cashier',
+        password: '',
     });
 
     const filteredUsers = useMemo(() => {
@@ -88,11 +90,17 @@ export default function UsersIndex({ users, roles }: Props) {
                             <Field label="Rol">
                                 <Select value={createForm.data.role} onChange={(value) => createForm.setData('role', value)} options={roles} />
                             </Field>
+                            <Field label="Contraseña (opcional — default: 1234)">
+                                <Input value={createForm.data.password} onChange={(value) => createForm.setData('password', value)} type="password" />
+                                {createForm.errors.password && (
+                                    <p className="mt-1 text-label-md text-error">{createForm.errors.password}</p>
+                                )}
+                            </Field>
 
                             <button
                                 type="button"
                                 disabled={createForm.processing}
-                                onClick={() => createForm.post(route('admin.users.store'), { preserveScroll: true, onSuccess: () => createForm.reset('name', 'email') })}
+                                onClick={() => createForm.post(route('admin.users.store'), { preserveScroll: true, onSuccess: () => createForm.reset('name', 'email', 'password') })}
                                 className="w-full rounded-xl bg-primary px-4 py-3 text-body-sm font-semibold text-on-primary shadow-sm transition hover:opacity-95 disabled:opacity-60"
                             >
                                 Crear usuario
@@ -158,70 +166,129 @@ function UserRow({ user, roles }: { user: UserRow; roles: string[] }) {
         role: user.role,
     });
 
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
+    const passwordForm = useForm({
+        password: '',
+        password_confirmation: '',
+    });
+
+    const submitPassword = () => {
+        passwordForm.put(route('admin.users.set-password', user.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowPasswordForm(false);
+                passwordForm.reset();
+            },
+        });
+    };
+
     return (
-        <tr className="align-top">
-            <td className="px-4 py-4">
-                <div className="space-y-3">
-                    <Input value={form.data.name} onChange={(value) => form.setData('name', value)} />
-                    <Input value={form.data.email} onChange={(value) => form.setData('email', value)} type="email" />
-                </div>
-            </td>
-            <td className="px-4 py-4">
-                <Select value={form.data.role} onChange={(value) => form.setData('role', value)} options={roles} />
-            </td>
-            <td className="px-4 py-4">
-                <div className="space-y-2">
-                    <StatusBadge active={user.is_active} />
-                    <p className="text-label-md text-on-surface-variant">{user.updated_at ?? 'N/A'}</p>
-                </div>
-            </td>
-            <td className="px-4 py-4">
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        disabled={form.processing}
-                        onClick={() => form.put(route('admin.users.update', user.id), { preserveScroll: true })}
-                        className="rounded-xl bg-primary px-3 py-2 text-label-md font-semibold text-on-primary shadow-sm disabled:opacity-60"
-                    >
-                        Guardar
-                    </button>
-                    <button
-                        type="button"
-                        disabled={form.processing}
-                        onClick={() => router.patch(route('admin.users.toggle', user.id), {}, { preserveScroll: true })}
-                        className={`rounded-xl px-3 py-2 text-label-md font-semibold shadow-sm disabled:opacity-60 ${
-                            user.is_active
-                                ? 'border border-amber-400 bg-amber-50 text-amber-700'
-                                : 'border border-emerald-400 bg-emerald-50 text-emerald-700'
-                        }`}
-                    >
-                        {user.is_active ? 'Desactivar' : 'Activar'}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={form.processing}
-                        onClick={() => {
-                            if (!window.confirm(`Restablecer contraseña de ${user.name} a 1234?`)) return;
-                            router.post(route('admin.users.reset-password', user.id), {}, { preserveScroll: true });
-                        }}
-                        className="rounded-xl border border-outline px-3 py-2 text-label-md font-semibold text-on-surface shadow-sm disabled:opacity-60"
-                    >
-                        Reset clave
-                    </button>
-                    <button
-                        type="button"
-                        disabled={form.processing}
-                        onClick={() => {
-                            if (!window.confirm(`Restablecer PIN de ${user.name} a 1234?`)) return;
-                            router.post(route('admin.users.reset-pin', user.id), {}, { preserveScroll: true });
-                        }}
-                        className="rounded-xl border border-outline px-3 py-2 text-label-md font-semibold text-on-surface shadow-sm disabled:opacity-60"
-                    >
-                        Reset PIN
-                    </button>
-                </div>
-            </td>
-        </tr>
+        <>
+            <tr className="align-top">
+                <td className="px-4 py-4">
+                    <div className="space-y-3">
+                        <Input value={form.data.name} onChange={(value) => form.setData('name', value)} />
+                        <Input value={form.data.email} onChange={(value) => form.setData('email', value)} type="email" />
+                    </div>
+                </td>
+                <td className="px-4 py-4">
+                    <Select value={form.data.role} onChange={(value) => form.setData('role', value)} options={roles} />
+                </td>
+                <td className="px-4 py-4">
+                    <div className="space-y-2">
+                        <StatusBadge active={user.is_active} />
+                        <p className="text-label-md text-on-surface-variant">{user.updated_at ?? 'N/A'}</p>
+                    </div>
+                </td>
+                <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            disabled={form.processing}
+                            onClick={() => form.put(route('admin.users.update', user.id), { preserveScroll: true })}
+                            className="rounded-xl bg-primary px-3 py-2 text-label-md font-semibold text-on-primary shadow-sm disabled:opacity-60"
+                        >
+                            Guardar
+                        </button>
+                        <button
+                            type="button"
+                            disabled={form.processing}
+                            onClick={() => router.patch(route('admin.users.toggle', user.id), {}, { preserveScroll: true })}
+                            className={`rounded-xl px-3 py-2 text-label-md font-semibold shadow-sm disabled:opacity-60 ${
+                                user.is_active
+                                    ? 'border border-amber-400 bg-amber-50 text-amber-700'
+                                    : 'border border-emerald-400 bg-emerald-50 text-emerald-700'
+                            }`}
+                        >
+                            {user.is_active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowPasswordForm((v) => !v)}
+                            className={`rounded-xl px-3 py-2 text-label-md font-semibold shadow-sm ${
+                                showPasswordForm
+                                    ? 'bg-secondary text-on-secondary'
+                                    : 'border border-secondary text-secondary'
+                            }`}
+                        >
+                            {showPasswordForm ? 'Cancelar' : 'Cambiar clave'}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={form.processing}
+                            onClick={() => {
+                                if (!window.confirm(`Restablecer PIN de ${user.name} a 1234?`)) return;
+                                router.post(route('admin.users.reset-pin', user.id), {}, { preserveScroll: true });
+                            }}
+                            className="rounded-xl border border-outline px-3 py-2 text-label-md font-semibold text-on-surface shadow-sm disabled:opacity-60"
+                        >
+                            Reset PIN
+                        </button>
+                    </div>
+                </td>
+            </tr>
+
+            {showPasswordForm && (
+                <tr className="bg-surface-container-low">
+                    <td colSpan={4} className="px-4 pb-4 pt-2">
+                        <div className="rounded-xl border border-secondary/30 bg-surface p-4">
+                            <p className="mb-3 text-body-sm font-semibold text-on-surface">
+                                Nueva contraseña para <span className="text-secondary">{user.name}</span>
+                            </p>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <label className="block flex-1 min-w-[160px]">
+                                    <span className="mb-1 block text-label-md text-on-surface-variant">Nueva contraseña</span>
+                                    <Input
+                                        value={passwordForm.data.password}
+                                        onChange={(v) => passwordForm.setData('password', v)}
+                                        type="password"
+                                    />
+                                    {passwordForm.errors.password && (
+                                        <p className="mt-1 text-label-md text-error">{passwordForm.errors.password}</p>
+                                    )}
+                                </label>
+                                <label className="block flex-1 min-w-[160px]">
+                                    <span className="mb-1 block text-label-md text-on-surface-variant">Confirmar contraseña</span>
+                                    <Input
+                                        value={passwordForm.data.password_confirmation}
+                                        onChange={(v) => passwordForm.setData('password_confirmation', v)}
+                                        type="password"
+                                    />
+                                </label>
+                                <button
+                                    type="button"
+                                    disabled={passwordForm.processing || !passwordForm.data.password}
+                                    onClick={submitPassword}
+                                    className="rounded-xl bg-secondary px-4 py-3 text-label-md font-semibold text-on-secondary shadow-sm disabled:opacity-60"
+                                >
+                                    {passwordForm.processing ? 'Guardando...' : 'Establecer contraseña'}
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            )}
+        </>
     );
 }
 

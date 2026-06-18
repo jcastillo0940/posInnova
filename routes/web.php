@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\PurchaseOrderController;
 use App\Http\Controllers\Admin\ApprovalRequestController;
 use App\Http\Controllers\Admin\SaleReversalController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\OverviewController;
 use App\Http\Controllers\PosSaleController;
 use App\Http\Controllers\PosCreditPaymentController;
 use App\Http\Controllers\SupervisorPinController;
@@ -37,6 +38,7 @@ Route::get('/pos/credit-payments/{creditTransaction}/ticket/pdf', [PosCreditPaym
 Route::post('/customers', [CustomerController::class, 'store'])->middleware(['auth'])->name('customers.store');
 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/overview', OverviewController::class)->name('overview');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
@@ -78,6 +80,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::patch('/users/{user}/toggle', [UserController::class, 'toggle'])->name('users.toggle');
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
+    Route::put('/users/{user}/set-password', [UserController::class, 'setPassword'])->name('users.set-password');
     Route::post('/users/{user}/reset-pin', [UserController::class, 'resetPin'])->name('users.reset-pin');
 });
 

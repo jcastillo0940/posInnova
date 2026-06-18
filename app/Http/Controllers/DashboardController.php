@@ -11,13 +11,27 @@ use App\Models\PriceList;
 use App\Models\Promotion;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Support\Money;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(): Response
+    public function __invoke(): Response|RedirectResponse
     {
+        $user = auth()->user();
+
+        // Warehouse → inventory management
+        if ($user?->role === 'warehouse') {
+            return to_route('admin.inventory.products');
+        }
+
+        // Admin/owner/supervisor/accountant → executive overview
+        if ($user && ! in_array($user->role, ['cashier', 'seller'], true)) {
+            return to_route('admin.overview');
+        }
+
+        // Cashier / seller → POS
         $openSession = CashSession::query()
             ->with(['cashRegister.branch', 'user'])
             ->where('status', 'open')

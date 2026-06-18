@@ -1886,10 +1886,6 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                     allocations: invoiceMode === 'manual' ? manualAllocationPayload : [],
                                                 };
 
-                                                printTicketWindow.current = autoPrintReceipts
-                                                    ? window.open('', '_blank', 'width=420,height=800')
-                                                    : null;
-
                                                 if (!isOnline) {
                                                     void enqueueOfflineItem('credit_payment', paymentPayload);
                                                     setInvoiceDialogOpen(false);
@@ -1900,6 +1896,10 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                     return;
                                                 }
 
+                                                printTicketWindow.current = autoPrintReceipts
+                                                    ? window.open('', '_blank', 'width=420,height=800')
+                                                    : null;
+
                                                 router.post(route('pos.credit-payments.store'), paymentPayload, {
                                                     preserveScroll: true,
                                                     onSuccess: () => {
@@ -1907,6 +1907,12 @@ export default function Dashboard({ openSession, products, customers, priceLists
                                                         setInvoiceAmount('');
                                                         setSelectedInvoiceIds([]);
                                                         setInvoiceAppliedAmounts({});
+                                                    },
+                                                    onError: () => {
+                                                        if (printTicketWindow.current && !printTicketWindow.current.closed) {
+                                                            printTicketWindow.current.close();
+                                                        }
+                                                        printTicketWindow.current = null;
                                                     },
                                                 });
                                             }}

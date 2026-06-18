@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 type PermissionKey = keyof AuthPermissions;
 
 export const appNavigation = [
+    { name: 'Panel Ejecutivo', route: 'admin.overview', icon: 'dashboard', permission: 'accessOverview' },
     { name: 'Nueva Venta', route: 'dashboard', icon: 'point_of_sale', permission: 'accessPos' },
     { name: 'Transacciones', route: 'admin.reports.index', icon: 'history', permission: 'accessReports' },
     { name: 'Aprobaciones', route: 'admin.approvals.index', icon: 'approval', permission: 'accessReports' },

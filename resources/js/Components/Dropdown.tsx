@@ -42,7 +42,7 @@ const Trigger = ({ children }: PropsWithChildren) => {
 
             {open && (
                 <div
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-40 bg-transparent"
                     onClick={() => setOpen(false)}
                 ></div>
             )}
@@ -53,7 +53,7 @@ const Trigger = ({ children }: PropsWithChildren) => {
 const Content = ({
     align = 'right',
     width = '48',
-    contentClasses = 'py-1 bg-white',
+    contentClasses = 'py-1 bg-surface border border-outline-variant',
     children,
 }: PropsWithChildren<{
     align?: 'left' | 'right';

@@ -7,6 +7,7 @@ export default defineConfig({
         laravel({
             input: 'resources/js/app.tsx',
             refresh: true,
+            publicDirectory: 'public_html',
         }),
         react(),
     ],

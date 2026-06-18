@@ -206,7 +206,18 @@ class WooCommerceWordPressXmlImporter
 
         $text = str_replace(['$', ','], ['', ''], $text);
 
-        return is_numeric($text) ? number_format((float) $text, 2, '.', '') : null;
+        if (! is_numeric($text)) {
+            return null;
+        }
+
+        $amount = (float) $text;
+
+        // Reject negative or clearly corrupt values (> 99 million)
+        if ($amount < 0 || $amount > 99_999_999.99) {
+            return null;
+        }
+
+        return number_format($amount, 2, '.', '');
     }
 
     private function integer(mixed $value): int

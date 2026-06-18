@@ -3,6 +3,7 @@ import { PageProps } from '@/types';
 import { formatMoney, usdToCrc } from '@/lib/money';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { FieldInput, FieldSelect } from './Partials/Fields';
+import { ProductCombobox } from './Partials/ProductCombobox';
 import InventoryTabs from './Partials/InventoryTabs';
 import { Product, PurchaseOrderSummary, SupplierOption } from './types';
 
@@ -163,13 +164,14 @@ export default function InventoryPurchases({ products, suppliers, purchaseOrders
                                 {purchaseForm.data.items.map((item, index) => (
                                     <tr key={index}>
                                         <td className="px-3 py-3">
-                                            <FieldSelect
+                                            <ProductCombobox
                                                 value={item.product_id}
                                                 onChange={(value) => selectPurchaseProduct(index, value)}
                                                 options={[
                                                     { value: '', label: 'Producto nuevo' },
-                                                    ...products.map((product) => ({ value: String(product.id), label: `${product.name} (${product.stock})` })),
+                                                    ...products.map((product) => ({ value: String(product.id), label: `${product.name} (${product.barcode}) Stock: ${product.stock}` })),
                                                 ]}
+                                                placeholder="Buscar producto..."
                                             />
                                         </td>
                                         <td className="px-3 py-3">
